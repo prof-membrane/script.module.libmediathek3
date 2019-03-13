@@ -12,8 +12,13 @@ import re
 from datetime import datetime,timedelta
 import time
 
-from libmediathek3utils import getTranslation as translation
+import libmediathek3utils
 
 def dialogDate():
 	dialog = xbmcgui.Dialog()
-	return dialog.numeric(1, translation(31030)).replace('/','').replace(' ','0')
+	return dialog.numeric(1, libmediathek3utils.getTranslation(31030)).replace('/','').replace(' ','0')
+	
+def getSearchString():
+	dialog = xbmcgui.Dialog()
+	d = dialog.input(libmediathek3utils.getTranslation(31039),type=xbmcgui.INPUT_ALPHANUM)
+	return urllib.quote_plus(d)

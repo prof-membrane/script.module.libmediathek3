@@ -3,36 +3,89 @@ import urllib
 import urllib2
 import socket
 import xbmc
+import xbmcplugin
 import xbmcaddon
 import xbmcvfs
 import re
+import sys
 from StringIO import StringIO
 import gzip
+import cookielib
+import pickle
 temp = xbmc.translatePath(xbmcaddon.Addon().getAddonInfo('profile')+'temp').decode('utf-8')
 dict = xbmc.translatePath(xbmcaddon.Addon().getAddonInfo('profile')+'dict.py').decode('utf-8')
+
+socket.setdefaulttimeout(30)
+
+try:
+    from urllib.request import Request, urlopen, build_opener, BaseHandler
+except ImportError:
+    from urllib2 import Request, urlopen, build_opener, BaseHandler
 
 
 def log(msg):
 	xbmc.log(msg)
 
-def getTranslation(id):
-	return xbmcaddon.Addon(id='script.module.libmediathek3').getLocalizedString(id)
+def getTranslation(id,addonid='script.module.libmediathek3'):
+	return xbmcaddon.Addon(id=addonid).getLocalizedString(id)
 	
-def getUrl(url,headers=False):
+def getUrl(url,headers=False,post=False,cookies=False):
+	log(url)
+	return _request(url,headers,post,cookies)
 	try:
-		return _request(url,headers)
+		return _request(url,headers,post,cookies)
 	except:#fast retry hack
-		return _request(url,headers)
-def _request(url,headers):
-	xbmc.log(url)
-	req = urllib2.Request(url)
+		return _request(url,headers,post,cookies)
+def _request(url,headers,post,cookies):
+	log(url)
+	if post:
+		req = urllib2.Request(url,post)
+		log('########POST!')
+	else:
+		req = urllib2.Request(url)
 	if headers:
 		for key in headers:
 			req.add_header(key, headers[key])
+		#req.add_header('Content-Type','application/json')
+		req.has_header = lambda header_name: (True if header_name == 'Content-Length' else Request.has_header(req, header_name))
 	else:
 		req.add_header('User-Agent', 'Mozilla/5.0 (Windows NT 6.1; rv:25.0) Gecko/20100101 Firefox/25.0')
 		req.add_header('Accept-Encoding','gzip, deflate')
-	response = urllib2.urlopen(req)
+		
+		
+		
+		
+		
+	if cookies:
+		cj = cookielib.CookieJar()
+		log(pathUserdata(''))
+		log(pathUserdata('cookies.txt'))
+		if not f_exists(pathUserdata('')):
+			f_mkdir(pathUserdata(''))
+		if f_exists(pathUserdata('cookies.txt')):
+			c = pickle.loads(f_open(pathUserdata('cookies.txt')))
+			for cookie in c:
+				cj.set_cookie(cookie)
+		opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+		#response = urllib2.urlopen(req)
+		response = opener.open(req)
+		
+		c = []
+		for cookie in cj:
+			log(str(cookie))
+			c.append(cookie)
+		log(str(cj))
+			
+		f_write(pathUserdata('cookies.txt'),pickle.dumps(c))
+		#cj.save(cookiefile)
+	else:
+		response = urllib2.urlopen(req)
+		
+		
+		
+		
+		
+	#response = urllib2.urlopen(req)
 	compressed = response.info().get('Content-Encoding') == 'gzip'
 	link = response.read()
 	response.close()
@@ -52,11 +105,16 @@ def clearString(s):
 	s = s.replace("&#43;","\"")
 	s = s.strip()
 	return s
+	
 def pathUserdata(path):
 	special = xbmcaddon.Addon().getAddonInfo('profile')+path
 	special = special.replace('//','/').replace('special:/','special://')
 	return special
-	#return xbmc.translatePath(xbmcaddon.Addon().getAddonInfo('profile')+path).decode('utf-8')
+	
+def pathAddon(path):
+	special = xbmc.validatePath(xbmcaddon.Addon().getAddonInfo('path').replace('\\','/')+path.replace('\\','/'))
+	special = special.replace('//','/').replace('special:/','special://')
+	return special
 	
 def f_open(path):
 	try:
@@ -69,6 +127,7 @@ def f_open(path):
 
 def f_write(path,data):
 	try:
+		#f_mkdir(path)
 		f = xbmcvfs.File(path, 'w')
 		result = f.write(data)
 	except: pass
@@ -87,19 +146,23 @@ def f_exists(path):
 		return False
 	else:
 		return True
-"""
-def f_open(path):
-	f = xbmcvfs.File(path)
-	result = f.read()
-	f.close()
-	return result
-
-def f_write(path,data):
-	f = xbmcvfs.File(path, 'w')
-	result = f.write(data)
-	f.close()
-	return True
-"""
 	
 def f_mkdir(path):
 	return xbmcvfs.mkdir(path)
+	
+def searchWorkaroundWrite(searchword):
+	f_write(pathUserdata('/search.lock'),searchword)
+def searchWorkaroundRead():
+	return f_open(pathUserdata('/search.lock'))
+def searchWorkaroundExists():
+	return f_exists(pathUserdata('/search.lock'))
+def searchWorkaroundRemove():
+	log('###Krypton workaround: removing lock...')
+	f_remove(pathUserdata('/search.lock'))
+
+def setSetting(k,v):
+	return xbmcplugin.setSetting(int(sys.argv[1]), k, v)
+	
+def getSetting(k):
+	return xbmcplugin.getSetting(int(sys.argv[1]), id=k)
+	
