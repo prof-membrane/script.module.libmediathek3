@@ -30,7 +30,10 @@ def addEntries(l):
 			continue
 		doneList.append(str(d))
 		
-		u = _buildUri(d)
+		if '_overridepath' in d:
+			u = d['_overridepath']
+		else:
+			u = _buildUri(d)
 		newd = {}
 		for key in d:
 			if key.startswith('_'):
@@ -67,6 +70,8 @@ def addEntries(l):
 			"Aired": d.get('aired',''),
 			"Studio": d.get('channel',''),
 			}
+		if 'epoch' in d: 
+			ilabels['aired'] = time.strftime("%Y-%m-%d", time.gmtime(float(d['epoch'])))
 		if 'episode' in d: 
 			ilabels['Episode'] = d['episode']
 		if 'Season' in d: 
@@ -77,10 +82,22 @@ def addEntries(l):
 			ilabels['album'] = d['tvshowtitle']
 		if 'rating' in d:
 			ilabels['rating'] = d['rating']
+		if 'type' in d and d['type'] != 'nextPage':
+			if d['type'] == 'video' or d['type'] == 'live' or d['type'] == 'date' or d['type'] == 'clip':
+				ilabels['mediatype'] = 'video'
+			elif d['type'] == 'shows' or d['type'] == 'season':
+				ilabels['mediatype'] = 'season'
+			elif d['type'] == 'episode':
+				ilabels['mediatype'] = 'episode'
+			else:
+				ilabels['mediatype'] = 'video'
+				
 		ok=True
 		liz=xbmcgui.ListItem(clearString(d.get('name','')))
-			
-		liz.setInfo( type="Video", infoLabels=ilabels)
+		if d['type'] == 'audio':
+			liz.setInfo( type="music", infoLabels=ilabels)
+		else:
+			liz.setInfo( type="Video", infoLabels=ilabels)
 		liz.addStreamInfo('subtitle', {'language': 'deu'})
 		art = {}
 		art['thumb'] = d.get('thumb')
@@ -89,27 +106,32 @@ def addEntries(l):
 		art['fanart'] = d.get('fanart',d.get('thumb',fanart))
 		art['icon'] = d.get('channelLogo','')
 		liz.setArt(art)
-		if 'type' in d:
-			#if d['type'] == 'clip':
-			if False:
-				xbmc.log('ignoring clip')
-			elif d.get('type',None) == 'video' or d.get('type',None) == 'live' or d.get('type',None) == 'date' or d.get('type',None) == 'clip':
-				xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="episodes" )
-				liz.setProperty('IsPlayable', 'true')
-				lists.append([u,liz,False])
-			elif 'type' in d and d['type'] == 'nextPage':
-				xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="files" )
-				lists.append([u,liz,True])
-			elif d['type'] == 'shows':
-				xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="tvshows" )
-				lists.append([u,liz,True])
-			else:
-				xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="files" )
-				lists.append([u,liz,True])
+		
+		if 'customprops' in d:
+			for prop in d['customprops']:
+				liz.setProperty(prop, d['customprops'][prop])
+				
+		if d.get('type',None) == 'video' or d.get('type',None) == 'live' or d.get('type',None) == 'date' or d.get('type',None) == 'clip' or d.get('type',None) == 'episode' or d.get('type',None) == 'audio':
+			#xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="episodes" )
+			liz.setProperty('IsPlayable', 'true')
+			lists.append([u,liz,False])
 		else:
 			lists.append([u,liz,True])
+		
+
+	if len(l) > 0:
+		type = l[0]['_type']
+		if type == 'video' or type == 'live' or type == 'date' or type == 'clip' or type == 'episode':
+			xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="episodes" )
+		elif type == 'shows' or type == 'season':
+			xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="tvshows" )
+		else:
+			xbmcplugin.setContent( handle=int( sys.argv[ 1 ] ), content="files" )
 			
 	xbmcplugin.addDirectoryItems(int(sys.argv[1]), lists)
+	
+def endOfDirectory():
+	xbmcplugin.endOfDirectory(int(sys.argv[1]),cacheToDisc=True)	
 
 def _buildUri(d):
 	u = d.get('pluginpath',sys.argv[0])+'?'
@@ -118,7 +140,10 @@ def _buildUri(d):
 		if not key.startswith('_'):
 			if i > 0:
 				u += '&'
-			u += key + '=' + urllib.quote_plus(d[key])
+			try:
+				u += key + '=' + urllib.quote_plus(d[key])
+			except:
+				u += key + '=' + urllib.quote_plus(d[key].encode('utf-8'))
 			i += 1
 	return u
 	
